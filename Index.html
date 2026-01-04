@@ -37,6 +37,12 @@ header {
 .name {
   font-weight: bold;
   color: #4a90e2;
+  font-size: 14px;
+}
+.time {
+  font-size: 12px;
+  color: #888;
+  margin-left: 5px;
 }
 .msg img {
   max-width: 100%;
@@ -102,7 +108,7 @@ const storage = firebase.storage();
 /* ===== USER ===== */
 let user = "";
 
-/* ===== TỰ ĐỘNG ĐĂNG NHẬP ===== */
+/* ===== AUTO LOGIN ===== */
 const savedName = localStorage.getItem("uchat_name");
 if (savedName) {
   user = savedName;
@@ -114,10 +120,7 @@ if (savedName) {
 /* ===== LOGIN ===== */
 function login() {
   const name = document.getElementById("username").value.trim();
-  if (!name) {
-    alert("Nhập tên trước đã!");
-    return;
-  }
+  if (!name) return alert("Nhập tên trước đã!");
 
   user = name;
   localStorage.setItem("uchat_name", name);
@@ -127,7 +130,7 @@ function login() {
   document.getElementById("input").style.display = "flex";
 }
 
-/* ===== SEND MESSAGE / IMAGE ===== */
+/* ===== SEND ===== */
 function send() {
   const text = document.getElementById("text").value.trim();
   const file = document.getElementById("img").files[0];
@@ -156,14 +159,26 @@ function send() {
   document.getElementById("img").value = "";
 }
 
-/* ===== RECEIVE MESSAGE ===== */
+/* ===== FORMAT TIME ===== */
+function formatTime(t) {
+  const d = new Date(t);
+  let h = d.getHours();
+  let m = d.getMinutes();
+  if (m < 10) m = "0" + m;
+  return h + ":" + m;
+}
+
+/* ===== RECEIVE ===== */
 db.on("child_added", snap => {
   const data = snap.val();
   const div = document.createElement("div");
   div.className = "msg";
 
   div.innerHTML = `
-    <div class="name">${data.name}</div>
+    <div class="name">
+      ${data.name}
+      <span class="time">· ${formatTime(data.time)}</span>
+    </div>
     ${data.msg ? `<div>${data.msg}</div>` : ""}
     ${data.image ? `<img src="${data.image}">` : ""}
   `;
