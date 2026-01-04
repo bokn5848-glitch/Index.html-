@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>UChat</title>
 
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -19,38 +20,17 @@ header{background:#4a90e2;color:#fff;padding:15px;text-align:center;font-size:20
   margin:8px 0;
   border-radius:8px;
   max-width:75%;
-  position:relative;
-}
-.msg .content{
   white-space:pre-wrap;
-  word-break:break-word;
+  word-break:break-all; /* ✂️ CẮT GIỮA CHỮ */
 }
 .me{background:#d9ecff;margin-left:auto;text-align:right}
 .name{font-weight:bold;color:#4a90e2}
 .time{font-size:11px;color:#888}
 .delete{color:red;cursor:pointer;font-size:12px}
 
-.reactions{
-  display:flex;
-  gap:8px;
-  font-size:18px;
-  margin-top:5px;
-}
+.reactions{display:flex;gap:8px;font-size:18px;margin-top:5px}
 .reactions span{cursor:pointer;opacity:.4}
 .reactions span.active{opacity:1}
-
-.picker{
-  position:absolute;
-  bottom:40px;
-  left:10px;
-  background:#fff;
-  border-radius:20px;
-  padding:6px 10px;
-  box-shadow:0 2px 10px rgba(0,0,0,.2);
-  display:none;
-  z-index:10;
-}
-.picker span{font-size:20px;margin:0 4px;cursor:pointer}
 
 #typing{font-size:13px;color:#666;padding:5px 10px;height:20px}
 #inputBox{display:flex;gap:5px;padding:10px;background:#fff}
@@ -67,7 +47,7 @@ button{padding:10px 15px}
 <div id="loginBox">
   <input id="username" placeholder="Nhập tên của bạn">
   <br><br>
-  <button onclick="doLogin()">Vào chat</button>
+  <button onclick="login()">Vào chat</button>
 </div>
 
 <div id="chat" style="display:none"></div>
@@ -77,10 +57,6 @@ button{padding:10px 15px}
   <input id="text" placeholder="Nhập tin nhắn...">
   <button onclick="send()">Gửi</button>
 </div>
-
-<audio id="notifySound">
-  <source src="https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3">
-</audio>
 
 <script>
 /* ===== FIREBASE ===== */
@@ -95,23 +71,18 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.database().ref("uchat");
 const typingRef=firebase.database().ref("typing");
 
-/* ===== DOM ===== */
 const chat=document.getElementById("chat");
-const loginBox=document.getElementById("loginBox");
-const inputBox=document.getElementById("inputBox");
 const typing=document.getElementById("typing");
-const notifySound=document.getElementById("notifySound");
 const textInput=document.getElementById("text");
 
 let user="";
 let firstLoad=true;
-const EMOJIS=["👍","😂","😮","😡","❤️"];
 
-/* ===== AUTO LOGIN ===== */
+/* AUTO LOGIN */
 const saved=localStorage.getItem("uchat_name");
 if(saved){user=saved;showChat();}
 
-function doLogin(){
+function login(){
   const name=document.getElementById("username").value.trim();
   if(!name) return alert("Nhập tên!");
   user=name;
@@ -120,40 +91,30 @@ function doLogin(){
 }
 
 function showChat(){
-  loginBox.style.display="none";
+  document.getElementById("loginBox").style.display="none";
   chat.style.display="block";
-  inputBox.style.display="flex";
+  document.getElementById("inputBox").style.display="flex";
 }
 
-/* ===== XUỐNG DÒNG THEO TỪ ~28 KÝ TỰ ===== */
-function wrap28Words(text){
-  const words = text.split(" ");
-  let line = "";
-  let result = "";
-
-  words.forEach(w=>{
-    if((line + w).length > 28){
-      result += line.trim() + "\n";
-      line = w + " ";
-    }else{
-      line += w + " ";
-    }
-  });
-
-  return (result + line).trim();
+/* ✂️ CẮT 28 KÝ TỰ (CẮT GIỮA CHỮ) */
+function cutText(text, limit=28){
+  let out="";
+  for(let i=0;i<text.length;i+=limit){
+    out+=text.substring(i,i+limit)+"\n";
+  }
+  return out.trim();
 }
 
 function send(){
   let text=textInput.value.trim();
   if(!text) return;
 
-  text = wrap28Words(text); // 👈 28 ký tự, không cắt chữ
+  text=cutText(text,28);
 
   db.push({
     name:user,
     msg:text,
-    time:Date.now(),
-    react:{}
+    time:Date.now()
   });
 
   textInput.value="";
@@ -165,15 +126,7 @@ function timeFormat(t){
   return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");
 }
 
-function toggleReact(id,emoji){
-  const ref=db.child(id).child("react").child(emoji).child(user);
-  ref.once("value",s=>{
-    if(s.exists()) ref.remove();
-    else ref.set(true);
-  });
-}
-
-/* ===== RECEIVE ===== */
+/* RECEIVE */
 db.on("child_added",snap=>{
   const d=snap.val();
   const key=snap.key;
@@ -183,69 +136,33 @@ db.on("child_added",snap=>{
   div.className="msg "+(isMe?"me":"");
   div.id=key;
 
-  const picker=document.createElement("div");
-  picker.className="picker";
-  EMOJIS.forEach(e=>{
-    const s=document.createElement("span");
-    s.innerText=e;
-    s.onclick=()=>toggleReact(key,e);
-    picker.appendChild(s);
-  });
-
   div.innerHTML=`
     <div class="name">${d.name}</div>
-    <div class="content">${d.msg}</div>
+    <div>${d.msg}</div>
     <div class="time">${timeFormat(d.time)}</div>
     ${isMe?`<div class="delete" onclick="db.child('${key}').remove()">🗑️</div>`:""}
-    <div class="reactions"></div>
   `;
-
-  div.appendChild(picker);
-  div.onclick=()=>picker.style.display=
-    picker.style.display==="block"?"none":"block";
 
   chat.appendChild(div);
   chat.scrollTop=chat.scrollHeight;
-
-  if(!firstLoad && !isMe) notifySound.play();
-  firstLoad=false;
 });
 
-/* ===== UPDATE REACTION ===== */
-db.on("child_changed",snap=>{
-  const d=snap.val();
-  const div=document.getElementById(snap.key);
-  if(!div) return;
-
-  const box=div.querySelector(".reactions");
-  box.innerHTML="";
-  if(!d.react) return;
-
-  for(const e in d.react){
-    const count=Object.keys(d.react[e]).length;
-    const span=document.createElement("span");
-    span.innerText=`${e} ${count}`;
-    if(d.react[e][user]) span.classList.add("active");
-    box.appendChild(span);
-  }
-});
-
+/* DELETE */
 db.on("child_removed",snap=>{
   document.getElementById(snap.key)?.remove();
 });
 
-/* ===== TYPING ===== */
-let typingTimer;
+/* TYPING */
+let timer;
 textInput.addEventListener("input",()=>{
   typingRef.child(user).set(true);
-  clearTimeout(typingTimer);
-  typingTimer=setTimeout(()=>typingRef.child(user).remove(),1200);
+  clearTimeout(timer);
+  timer=setTimeout(()=>typingRef.child(user).remove(),1200);
 });
-
 typingRef.on("value",snap=>{
-  const data=snap.val()||{};
-  const others=Object.keys(data).filter(n=>n!==user);
-  typing.innerText=others.length?others.join(", ")+" đang gõ...":"";
+  const d=snap.val()||{};
+  const o=Object.keys(d).filter(n=>n!==user);
+  typing.innerText=o.length?o.join(", ")+" đang gõ...":"";
 });
 </script>
 
