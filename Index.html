@@ -19,18 +19,19 @@ body{
 header{
   background:#4a90e2;
   color:#fff;
-  padding:15px;
+  padding:14px;
   text-align:center;
   font-size:20px;
 }
 
+/* CHAT */
 #chat{
+  padding:10px;
   height:calc(100vh - 140px);
   overflow-y:auto;
-  padding:10px;
 }
 
-/* KHUNG TIN */
+/* TIN NHẮN */
 .msg{
   display:inline-block;
   max-width:75%;
@@ -38,8 +39,12 @@ header{
   padding:10px 12px;
   margin:6px 0;
   border-radius:14px;
-  word-wrap:break-word;
-  white-space:pre-wrap;
+
+  /* 🔥 SỬA LỖI CHỮ DÀI */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+
   position:relative;
   clear:both;
 }
@@ -48,6 +53,7 @@ header{
 .me{
   background:#d9ecff;
   float:right;
+  text-align:left;
 }
 
 /* TIN NGƯỜI KHÁC */
@@ -55,13 +61,13 @@ header{
   float:left;
 }
 
+/* TÊN + GIỜ */
 .name{
   font-weight:bold;
   color:#4a90e2;
-  margin-bottom:3px;
   font-size:13px;
+  margin-bottom:4px;
 }
-
 .time{
   font-size:11px;
   color:#888;
@@ -69,35 +75,36 @@ header{
   text-align:right;
 }
 
+/* NÚT XÓA */
 .delete{
   position:absolute;
-  top:5px;
+  top:6px;
   right:8px;
-  cursor:pointer;
   font-size:14px;
-  color:#e74c3c;
+  color:red;
+  cursor:pointer;
 }
 
+/* INPUT */
 #input{
   display:flex;
-  gap:5px;
+  gap:6px;
   padding:10px;
   background:#fff;
 }
-
-input{
+#input input{
   flex:1;
   padding:10px;
   font-size:16px;
 }
-
-button{
-  padding:10px 15px;
+#input button{
+  padding:10px 14px;
 }
 
+/* LOGIN */
 #login{
-  text-align:center;
   padding:20px;
+  text-align:center;
 }
 </style>
 </head>
@@ -106,21 +113,24 @@ button{
 
 <header>💬 UChat</header>
 
+<!-- LOGIN -->
 <div id="login">
   <input id="username" placeholder="Nhập tên của bạn">
   <br><br>
   <button onclick="login()">Vào chat</button>
 </div>
 
+<!-- CHAT -->
 <div id="chat" style="display:none"></div>
 
+<!-- INPUT -->
 <div id="input" style="display:none">
   <input id="text" placeholder="Nhập tin nhắn...">
   <button onclick="send()">Gửi</button>
 </div>
 
 <script>
-/* FIREBASE */
+/* ===== FIREBASE ===== */
 const firebaseConfig={
   apiKey:"AIzaSyCxxxxxxxxxxxxxxxxxxxx",
   authDomain:"uchat-406f4.firebaseapp.com",
@@ -128,10 +138,11 @@ const firebaseConfig={
   projectId:"uchat-406f4"
 };
 firebase.initializeApp(firebaseConfig);
-
 const db=firebase.database().ref("uchat");
-const chat=document.getElementById("chat");
+
+/* ===== USER ===== */
 let user="";
+const chat=document.getElementById("chat");
 
 /* TỰ ĐĂNG NHẬP */
 const saved=localStorage.getItem("uchat_name");
@@ -140,6 +151,7 @@ if(saved){
   showChat();
 }
 
+/* LOGIN */
 function login(){
   const name=document.getElementById("username").value.trim();
   if(!name) return alert("Nhập tên!");
@@ -162,7 +174,7 @@ function send(){
   document.getElementById("text").value="";
 }
 
-/* FORMAT GIỜ */
+/* ĐỊNH DẠNG GIỜ */
 function timeFormat(t){
   const d=new Date(t);
   return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");
@@ -178,25 +190,25 @@ function deleteMsg(id){
 /* NHẬN TIN */
 db.on("child_added",snap=>{
   const d=snap.val();
-  const key=snap.key;
+  const id=snap.key;
   const isMe=d.name===user;
 
   const div=document.createElement("div");
   div.className="msg "+(isMe?"me":"other");
-  div.id=key;
+  div.id=id;
 
   div.innerHTML=`
     <div class="name">${d.name}</div>
     <div>${d.msg}</div>
     <div class="time">${timeFormat(d.time)}</div>
-    ${isMe?`<div class="delete" onclick="deleteMsg('${key}')">🗑</div>`:""}
+    ${isMe?`<div class="delete" onclick="deleteMsg('${id}')">🗑</div>`:""}
   `;
 
   chat.appendChild(div);
   chat.scrollTop=chat.scrollHeight;
 });
 
-/* KHI XÓA */
+/* KHI BỊ XÓA */
 db.on("child_removed",snap=>{
   const el=document.getElementById(snap.key);
   if(el) el.remove();
