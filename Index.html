@@ -7,69 +7,43 @@
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <style>
 body{margin:0;font-family:Arial;background:#f2f2f2}
-header{
-  background:#4a90e2;color:#fff;padding:12px;
-  display:flex;justify-content:space-between;align-items:center
-}
+header{background:#4a90e2;color:#fff;padding:12px;display:flex;justify-content:space-between;align-items:center}
 #logout{background:#ff4d4d;color:#fff;border:none;padding:6px 10px;border-radius:6px}
 
-#chat{height:calc(100vh - 230px);overflow-y:auto;padding:10px}
-.msg{
-  background:#fff;padding:8px 10px;margin:6px 0;
-  border-radius:14px;max-width:70%;width:fit-content;
-  position:relative;word-wrap:break-word
+#chat{height:calc(100vh - 280px);overflow-y:auto;padding:10px}
+
+.msgRow{display:flex;align-items:flex-start;gap:8px;margin:6px 0}
+.meRow{flex-direction:row-reverse}
+
+.avatar{
+  width:34px;height:34px;border-radius:50%;
+  background:#4a90e2;color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:bold;flex-shrink:0;overflow:hidden
 }
-.me{background:#d9ecff;margin-left:auto}
+.avatar img{width:100%;height:100%;object-fit:cover}
+
+.msg{
+  background:#fff;padding:8px 10px;border-radius:14px;
+  max-width:70%;width:fit-content;word-wrap:break-word
+}
+.me{background:#d9ecff}
+
 .name{font-weight:bold;color:#4a90e2;font-size:13px}
 .content{white-space:pre-wrap}
 .time{font-size:11px;color:#888;text-align:right}
-.status{
-  font-size:11px;color:#4a90e2;
-  text-align:right;cursor:pointer
-}
-.delete{font-size:12px;color:red;cursor:pointer;text-align:right}
+
 .replyBtn{font-size:12px;color:#4a90e2;cursor:pointer;text-align:right}
+.delete{font-size:12px;color:red;cursor:pointer;text-align:right}
+.status{font-size:11px;color:#4a90e2;text-align:right}
 
 .replyPreview{
   font-size:13px;background:#f1f1f1;
   padding:5px 8px;border-radius:8px;margin-bottom:4px
-}
-
-/* reactions */
-.reactions{display:flex;gap:6px;font-size:15px;margin-top:4px}
-.reactions span{opacity:.6}
-.reactions span.active{opacity:1}
-
-.reactionBar{
-  position:absolute;bottom:100%;left:0;
-  background:#fff;padding:6px 10px;border-radius:30px;
-  box-shadow:0 4px 12px rgba(0,0,0,.25);
-  display:none;gap:8px;z-index:999
-}
-.reactionBar span{font-size:22px;cursor:pointer}
-
-.emojiPanel{
-  position:absolute;bottom:100%;right:0;
-  background:#fff;padding:10px;border-radius:14px;
-  box-shadow:0 4px 12px rgba(0,0,0,.3);
-  display:none;max-width:260px;flex-wrap:wrap;gap:6px
-}
-.emojiPanel span{font-size:22px;cursor:pointer}
-
-/* seen list */
-.seenBox{
-  position:absolute;
-  right:0;bottom:100%;
-  background:#fff;
-  padding:8px 10px;
-  border-radius:10px;
-  box-shadow:0 4px 12px rgba(0,0,0,.25);
-  font-size:13px;
-  display:none;
-  z-index:999;
 }
 
 #typing{font-size:13px;color:#666;padding:5px 10px;height:18px}
@@ -84,9 +58,7 @@ button{padding:10px}
   border-left:4px solid #4a90e2;
   margin-bottom:6px;font-size:14px;position:relative
 }
-.replyBox .close{
-  position:absolute;right:6px;top:4px;cursor:pointer;color:red
-}
+.replyBox .close{position:absolute;right:6px;top:4px;cursor:pointer;color:red}
 
 #loginBox{text-align:center;padding:30px}
 </style>
@@ -100,8 +72,8 @@ button{padding:10px}
 </header>
 
 <div id="loginBox">
-  <input id="username" placeholder="Nhập tên của bạn">
-  <br><br>
+  <input id="username" placeholder="Nhập tên của bạn"><br><br>
+  <input type="file" id="avatarFile" accept="image/*"><br><br>
   <button onclick="doLogin()">Vào chat</button>
 </div>
 
@@ -124,35 +96,56 @@ firebase.initializeApp({
   projectId:"uchat-406f4"
 });
 
-const db=firebase.database().ref("uchat");
-const typingRef=firebase.database().ref("typing");
+const db = firebase.database().ref("uchat");
+const typingRef = firebase.database().ref("typing");
+const storage = firebase.storage();
 
 const chat=document.getElementById("chat");
 const textInput=document.getElementById("text");
 const replyArea=document.getElementById("replyArea");
 const typing=document.getElementById("typing");
 
-let user="",replyTo=null;
-
-const EMOJIS=["❤️","😂","😮","😢","😡","👍"];
-const MORE_EMOJI=["😀","🤣","😍","😭","😎","😴","🤔","😱","🔥","🎉","💯"];
+let user="", avatar="", replyTo=null;
 
 const saved=localStorage.getItem("uchat_name");
-if(saved){user=saved;showChat();}
+if(saved){
+  user=saved;
+  avatar=localStorage.getItem("uchat_avatar")||"";
+  showChat();
+}
 
 function doLogin(){
   const n=username.value.trim();
+  const file=avatarFile.files[0];
   if(!n) return alert("Nhập tên!");
-  user=n;localStorage.setItem("uchat_name",n);showChat();
+
+  user=n;
+  localStorage.setItem("uchat_name",n);
+
+  if(file){
+    const ref=storage.ref("avatars/"+n);
+    ref.put(file).then(()=>{
+      ref.getDownloadURL().then(url=>{
+        avatar=url;
+        localStorage.setItem("uchat_avatar",url);
+        showChat();
+      });
+    });
+  }else{
+    avatar="";
+    showChat();
+  }
 }
+
 function showChat(){
   loginBox.style.display="none";
   chat.style.display="block";
   inputBox.style.display="flex";
 }
+
 function logout(){
   if(!confirm("Đăng xuất / đổi tên?"))return;
-  localStorage.removeItem("uchat_name");
+  localStorage.clear();
   user="";chat.innerHTML="";
   loginBox.style.display="block";
   chat.style.display="none";
@@ -169,81 +162,47 @@ function send(){
   if(!t) return;
   db.push({
     name:user,
+    avatar:avatar,
     msg:wrap28(t),
     time:Date.now(),
-    reply:replyTo,
-    react:{},
-    seen:{}
+    reply:replyTo
   });
   textInput.value="";
   replyTo=null;
   replyArea.innerHTML="";
-  typingRef.child(user).remove();
 }
 
-const tf=t=>{const d=new Date(t);return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0")};
+const tf=t=>{
+  const d=new Date(t);
+  return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");
+};
 
-function toggleReact(id,e){
-  const r=db.child(id).child("react").child(e).child(user);
-  r.once("value",s=>s.exists()?r.remove():r.set(true));
-}
-
-/* RECEIVE */
 db.on("child_added",snap=>{
   const d=snap.val(),k=snap.key,isMe=d.name===user;
-  const div=document.createElement("div");
-  div.className="msg "+(isMe?"me":"");div.id=k;
+  const row=document.createElement("div");
+  row.className="msgRow "+(isMe?"meRow":"");
+
+  const av=d.avatar
+    ? `<div class="avatar"><img src="${d.avatar}"></div>`
+    : `<div class="avatar">${d.name.charAt(0)}</div>`;
 
   let replyHTML="";
   if(d.reply) replyHTML=`<div class="replyPreview"><b>${d.reply.name}</b>: ${d.reply.msg}</div>`;
 
-  div.innerHTML=`
-    <div class="name">${d.name}</div>
-    ${replyHTML}
-    <div class="content">${d.msg}</div>
-    <div class="time">${tf(d.time)}</div>
-    ${isMe?`<div class="status" id="status_${k}">✔️ Đã gửi</div>`:""}
-    <div class="seenBox" id="seen_${k}"></div>
-    <div class="replyBtn" onclick="setReply('${k}')">↩️ Trả lời</div>
-    ${isMe?`<div class="delete" onclick="db.child('${k}').remove()">🗑️</div>`:""}
-    <div class="reactions"></div>
+  row.innerHTML=`
+    ${av}
+    <div class="msg ${isMe?"me":""}" id="${k}">
+      <div class="name">${d.name}</div>
+      ${replyHTML}
+      <div class="content">${d.msg}</div>
+      <div class="time">${tf(d.time)}</div>
+      <div class="replyBtn" onclick="setReply('${k}')">↩️ Trả lời</div>
+      ${isMe?`<div class="delete" onclick="db.child('${k}').remove()">🗑️</div>`:""}
+    </div>
   `;
-
-  /* mark seen */
-  if(!isMe){
-    const obs=new IntersectionObserver(e=>{
-      if(e[0].isIntersecting){
-        db.child(k).child("seen").child(user).set(true);
-        obs.disconnect();
-      }
-    },{threshold:0.6});
-    obs.observe(div);
-  }
-
-  chat.appendChild(div);
+  chat.appendChild(row);
   chat.scrollTop=chat.scrollHeight;
 });
-
-/* UPDATE */
-db.on("child_changed",snap=>{
-  const d=snap.val(),k=snap.key;
-  const status=document.getElementById("status_"+k);
-  const seenBox=document.getElementById("seen_"+k);
-
-  if(d.seen && status){
-    const names=Object.keys(d.seen);
-    status.innerText=names.length>1?"✔️✔️ Đã xem":"✔️ Đã gửi";
-    seenBox.innerHTML="<b>Đã xem:</b><br>"+names.join("<br>");
-
-    status.onclick=()=>{
-      seenBox.style.display=
-        seenBox.style.display==="block"?"none":"block";
-    };
-  }
-});
-
-/* DELETE */
-db.on("child_removed",s=>document.getElementById(s.key)?.remove());
 
 function setReply(id){
   const m=document.getElementById(id);
@@ -252,7 +211,6 @@ function setReply(id){
 }
 function cancelReply(){replyTo=null;replyArea.innerHTML="";}
 
-/* TYPING */
 let tmr;
 textInput.oninput=()=>{
   typingRef.child(user).set(true);
