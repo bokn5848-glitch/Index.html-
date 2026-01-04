@@ -10,27 +10,16 @@
 
 <style>
 body{margin:0;font-family:Arial;background:#f2f2f2}
-header{
-  background:#4a90e2;color:#fff;padding:12px;
-  display:flex;justify-content:space-between;align-items:center
-}
+header{background:#4a90e2;color:#fff;padding:12px;display:flex;justify-content:space-between}
 #logout{background:#ff4d4d;color:#fff;border:none;padding:6px 10px;border-radius:6px}
 
-#chat{height:calc(100vh - 250px);overflow-y:auto;padding:10px}
+#chat{height:calc(100vh - 330px);overflow-y:auto;padding:10px}
 
-.msg{
-  background:#fff;padding:8px 10px;margin:6px 0;
-  border-radius:14px;max-width:70%;width:fit-content;
-  position:relative;word-wrap:break-word
-}
+.msg{background:#fff;padding:8px 10px;margin:6px 0;border-radius:14px;max-width:70%}
 .me{background:#d9ecff;margin-left:auto}
 
 .nameRow{display:flex;align-items:center;gap:6px}
-.avatar{
-  width:32px;height:32px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  color:#fff;font-weight:bold;font-size:14px
-}
+.avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold}
 .male{background:#4a90e2}
 .female{background:#ff6fa5}
 .other{background:#888}
@@ -39,24 +28,34 @@ header{
 .content{white-space:pre-wrap}
 .time{font-size:11px;color:#888;text-align:right}
 
+.status{font-size:11px;color:#4a90e2;text-align:right;cursor:pointer}
+
+.replyPreview{background:#eef6ff;border-left:4px solid #4a90e2;padding:5px 8px;margin-bottom:4px;font-size:13px}
+.replyBtn{font-size:12px;color:#4a90e2;cursor:pointer}
+
 .delete{font-size:12px;color:red;cursor:pointer;text-align:right}
 
-.confirmDelete{
-  font-size:12px;margin-top:4px;color:#555;text-align:right
+.seenBox{
+  position:absolute;
+  right:0;bottom:100%;
+  background:#fff;padding:8px 10px;
+  border-radius:10px;
+  box-shadow:0 4px 12px rgba(0,0,0,.25);
+  font-size:13px;
+  display:none;
+  z-index:999;
 }
-.confirmDelete span{
-  cursor:pointer;margin-left:8px
-}
-.confirmDelete .yes{color:red}
-.confirmDelete .no{color:#4a90e2}
+
+#replyBox{background:#eef6ff;border-left:4px solid #4a90e2;padding:6px 10px;margin-bottom:6px;position:relative}
+#replyBox .close{position:absolute;right:6px;top:4px;cursor:pointer;color:red}
 
 #typing{font-size:13px;color:#666;padding:5px 10px;height:18px}
-#inputBox{display:flex;padding:10px;background:#fff}
-#inputBox input{flex:1;padding:10px;font-size:16px}
-#inputBox button{padding:10px}
+
+#inputBox{padding:10px;background:#fff}
+#sendRow{display:flex;gap:6px}
+input,select{padding:10px;font-size:16px;width:100%}
 
 #loginBox{text-align:center;padding:30px}
-select,input{padding:10px;font-size:16px;width:100%}
 </style>
 </head>
 
@@ -82,8 +81,11 @@ select,input{padding:10px;font-size:16px;width:100%}
 <div id="typing"></div>
 
 <div id="inputBox" style="display:none">
-  <input id="text" placeholder="Nhập tin nhắn...">
-  <button onclick="send()">Gửi</button>
+  <div id="replyArea"></div>
+  <div id="sendRow">
+    <input id="text" placeholder="Nhập tin nhắn...">
+    <button onclick="send()">Gửi</button>
+  </div>
 </div>
 
 <script>
@@ -95,17 +97,21 @@ firebase.initializeApp({
 });
 
 const db=firebase.database().ref("uchat");
+const typingRef=firebase.database().ref("typing");
+
 const chat=document.getElementById("chat");
 const textInput=document.getElementById("text");
+const replyArea=document.getElementById("replyArea");
+const typing=document.getElementById("typing");
 
-let user="",gender="";
+let user="",gender="",replyTo=null;
 
-const savedName=localStorage.getItem("uchat_name");
-const savedGender=localStorage.getItem("uchat_gender");
-if(savedName && savedGender){
-  user=savedName;gender=savedGender;showChat();
-}
+/* AUTO LOGIN */
+const sn=localStorage.getItem("uchat_name");
+const sg=localStorage.getItem("uchat_gender");
+if(sn&&sg){user=sn;gender=sg;showChat();}
 
+/* LOGIN */
 function doLogin(){
   const n=username.value.trim();
   const g=gender.value;
@@ -119,19 +125,17 @@ function doLogin(){
 function showChat(){
   loginBox.style.display="none";
   chat.style.display="block";
-  inputBox.style.display="flex";
+  inputBox.style.display="block";
 }
 
+/* LOGOUT */
 function logout(){
-  if(!confirm("Đăng xuất / đổi tên?"))return;
+  if(!confirm("Đăng xuất để đổi tên / giới tính?"))return;
   localStorage.clear();
-  user="";gender="";
-  chat.innerHTML="";
-  loginBox.style.display="block";
-  chat.style.display="none";
-  inputBox.style.display="none";
+  location.reload();
 }
 
+/* SEND */
 function send(){
   const t=textInput.value.trim();
   if(!t) return;
@@ -139,57 +143,104 @@ function send(){
     name:user,
     gender:gender,
     msg:t,
-    time:Date.now()
+    reply:replyTo,
+    time:Date.now(),
+    seen:{}
   });
   textInput.value="";
+  replyTo=null;
+  replyArea.innerHTML="";
+  typingRef.child(user).remove();
 }
 
+/* TIME */
 const tf=t=>{
   const d=new Date(t);
   return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");
 };
 
+/* RECEIVE */
 db.on("child_added",snap=>{
   const d=snap.val(),k=snap.key,isMe=d.name===user;
   const div=document.createElement("div");
   div.className="msg "+(isMe?"me":"");
   div.id=k;
 
-  const first=d.name.charAt(0).toUpperCase();
+  let replyHTML="";
+  if(d.reply){
+    replyHTML=`<div class="replyPreview"><b>${d.reply.name}</b>: ${d.reply.msg}</div>`;
+  }
 
   div.innerHTML=`
     <div class="nameRow">
-      <div class="avatar ${d.gender}">${first}</div>
+      <div class="avatar ${d.gender}">${d.name[0]}</div>
       <div class="name">${d.name}</div>
     </div>
+    ${replyHTML}
     <div class="content">${d.msg}</div>
     <div class="time">${tf(d.time)}</div>
-    ${isMe?`
-      <div class="delete" onclick="askDelete('${k}')">🗑️</div>
-      <div class="confirmDelete" id="confirm_${k}" style="display:none">
-        Xác nhận xóa?
-        <span class="yes" onclick="confirmDelete('${k}')">Xóa</span>
-        <span class="no" onclick="cancelDelete('${k}')">Hủy</span>
-      </div>
-    `:""}
+    ${isMe?`<div class="status" id="st_${k}">✔️</div>`:""}
+    <div class="seenBox" id="seen_${k}"></div>
+    <div class="replyBtn" onclick="setReply('${k}')">↩️ Trả lời</div>
+    ${isMe?`<div class="delete" onclick="db.child('${k}').remove()">🗑️</div>`:""}
   `;
+
+  /* MARK SEEN */
+  if(!isMe){
+    const obs=new IntersectionObserver(e=>{
+      if(e[0].isIntersecting){
+        db.child(k).child("seen").child(user).set(true);
+        obs.disconnect();
+      }
+    },{threshold:0.6});
+    obs.observe(div);
+  }
+
   chat.appendChild(div);
   chat.scrollTop=chat.scrollHeight;
 });
 
+/* UPDATE SEEN */
+db.on("child_changed",snap=>{
+  const d=snap.val(),k=snap.key;
+  const st=document.getElementById("st_"+k);
+  const box=document.getElementById("seen_"+k);
+  if(d.seen && st){
+    const names=Object.keys(d.seen);
+    st.innerText=names.length>1?"✔✔":"✔️";
+    box.innerHTML="<b>Đã xem:</b><br>"+names.join("<br>");
+    st.onclick=()=>box.style.display=box.style.display==="block"?"none":"block";
+  }
+});
+
+/* REPLY */
+function setReply(id){
+  const m=document.getElementById(id);
+  replyTo={name:m.querySelector(".name").innerText,msg:m.querySelector(".content").innerText};
+  replyArea.innerHTML=`
+    <div id="replyBox">
+      Trả lời <b>${replyTo.name}</b>: ${replyTo.msg}
+      <span class="close" onclick="cancelReply()">✖</span>
+    </div>`;
+}
+function cancelReply(){replyTo=null;replyArea.innerHTML="";}
+
+/* TYPING */
+let tmr;
+textInput.oninput=()=>{
+  typingRef.child(user).set(true);
+  clearTimeout(tmr);
+  tmr=setTimeout(()=>typingRef.child(user).remove(),1200);
+};
+typingRef.on("value",s=>{
+  const o=Object.keys(s.val()||{}).filter(n=>n!==user);
+  typing.innerText=o.length?o.join(", ")+" đang gõ...":"";
+});
+
+/* DELETE */
 db.on("child_removed",s=>{
   document.getElementById(s.key)?.remove();
 });
-
-function askDelete(id){
-  document.getElementById("confirm_"+id).style.display="block";
-}
-function cancelDelete(id){
-  document.getElementById("confirm_"+id).style.display="none";
-}
-function confirmDelete(id){
-  db.child(id).remove();
-}
 </script>
 
 </body>
