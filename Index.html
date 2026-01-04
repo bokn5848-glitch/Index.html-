@@ -44,7 +44,6 @@ header {
   right: 10px;
   cursor: pointer;
   color: red;
-  font-size: 14px;
 }
 #input {
   display: flex;
@@ -88,27 +87,90 @@ button {
 </div>
 
 <script>
-/* ===== FIREBASE CONFIG ===== */
-const firebaseConfig = {
-  apiKey: "AIzaSyCxxxxxxxxxxxxxxxxxxxx",
-  authDomain: "uchat-406f4.firebaseapp.com",
-  databaseURL: "https://uchat-406f4-default-rtdb.firebaseio.com/",
-  projectId: "uchat-406f4"
-};
-
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database().ref("uchat");
-
+/* ===== BIẾN CHUNG ===== */
 let user = "";
+let db = null;
 
-/* ===== LOGIN ===== */
+/* ===== LOGIN (CHẮC CHẮN CHẠY) ===== */
 function login() {
   const name = document.getElementById("username").value.trim();
-  if (!name) return alert("Nhập tên trước đã!");
+  if (!name) {
+    alert("Nhập tên trước đã!");
+    return;
+  }
+
   user = name;
+
   document.getElementById("login").style.display = "none";
   document.getElementById("chat").style.display = "block";
   document.getElementById("input").style.display = "flex";
 }
 
-/* ===== SEND MESSAGE =====
+/* ===== FIREBASE (BỌC TRY/CATCH ĐỂ KHÔNG LÀM ĐỨNG WEB) ===== */
+try {
+  const firebaseConfig = {
+    apiKey: "AIzaSyCxxxxxxxxxxxxxxxxxxxx",
+    authDomain: "uchat-406f4.firebaseapp.com",
+    databaseURL: "https://uchat-406f4-default-rtdb.firebaseio.com/",
+    projectId: "uchat-406f4"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database().ref("uchat");
+
+  // NHẬN TIN
+  db.on("child_added", snap => {
+    const data = snap.val();
+    const key = snap.key;
+
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.id = key;
+
+    div.innerHTML = `
+      <div class="name">${data.name}</div>
+      <div>${data.msg}</div>
+      ${data.name === user ? `<div class="delete" onclick="del('${key}')">🗑️</div>` : ""}
+    `;
+
+    document.getElementById("chat").appendChild(div);
+    document.getElementById("chat").scrollTop =
+      document.getElementById("chat").scrollHeight;
+  });
+
+} catch (e) {
+  console.error("Firebase lỗi:", e);
+  alert("⚠️ Firebase chưa kết nối.\nBạn vẫn vào chat được nhưng chưa gửi tin.");
+}
+
+/* ===== SEND ===== */
+function send() {
+  const text = document.getElementById("text").value.trim();
+  if (!text) return;
+
+  if (!db) {
+    alert("Firebase chưa kết nối!");
+    return;
+  }
+
+  db.push({
+    name: user,
+    msg: text,
+    time: Date.now()
+  });
+
+  document.getElementById("text").value = "";
+}
+
+/* ===== DELETE ===== */
+function del(key) {
+  if (!db) return;
+  if (confirm("Xóa tin nhắn này?")) {
+    db.child(key).remove();
+    document.getElementById(key)?.remove();
+  }
+}
+</script>
+
+</body>
+</html>
