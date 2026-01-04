@@ -48,8 +48,8 @@ header{
   flex-shrink:0;
   text-transform:uppercase
 }
-.male{background:#8ecbff}    /* xanh lợt */
-.female{background:#ffb6c1}  /* hồng lợt */
+.male{background:#8ecbff}
+.female{background:#ffb6c1}
 
 .msg{
   background:#fff;
@@ -162,7 +162,7 @@ const textInput = document.getElementById("text");
 const replyArea = document.getElementById("replyArea");
 const typing = document.getElementById("typing");
 
-let user = "", gender = "male", replyTo = null;
+let user="", gender="male", replyTo=null;
 
 /* ===== AUTO LOGIN ===== */
 const savedName = localStorage.getItem("uchat_name");
@@ -177,13 +177,11 @@ function doLogin(){
   const n = username.value.trim();
   if(!n) return alert("Nhập tên!");
 
-  const g = document.querySelector("input[name='gender']:checked").value;
-
+  gender = document.querySelector("input[name='gender']:checked").value;
   user = n;
-  gender = g;
 
   localStorage.setItem("uchat_name", n);
-  localStorage.setItem("uchat_gender", g);
+  localStorage.setItem("uchat_gender", gender);
 
   showChat();
 }
@@ -194,17 +192,17 @@ function showChat(){
   inputBox.style.display="flex";
 }
 
-/* ===== LOGOUT (CHỌN LẠI GIỚI TÍNH) ===== */
+/* ===== LOGOUT ===== */
 function logout(){
   if(!confirm("Đăng xuất / đổi tên / đổi giới tính?")) return;
 
   localStorage.removeItem("uchat_name");
   localStorage.removeItem("uchat_gender");
 
-  user = "";
-  gender = "male";
-
+  user="";
+  gender="male";
   chat.innerHTML="";
+
   loginBox.style.display="block";
   chat.style.display="none";
   inputBox.style.display="none";
@@ -213,8 +211,7 @@ function logout(){
 /* ===== CHAT ===== */
 function wrap28(t){
   let o="";
-  for(let i=0;i<t.length;i+=28)
-    o+=t.slice(i,i+28)+"\n";
+  for(let i=0;i<t.length;i+=28) o+=t.slice(i,i+28)+"\n";
   return o.trim();
 }
 
@@ -252,17 +249,11 @@ db.on("child_added",snap=>{
 
   let replyHTML="";
   if(d.reply){
-    replyHTML=`
-      <div class="replyPreview">
-        <b>${d.reply.name}</b>: ${d.reply.msg}
-      </div>`;
+    replyHTML=`<div class="replyPreview"><b>${d.reply.name}</b>: ${d.reply.msg}</div>`;
   }
 
   row.innerHTML=`
-    <div class="avatar ${gClass}">
-      ${d.name.charAt(0)}
-    </div>
-
+    <div class="avatar ${gClass}">${d.name.charAt(0)}</div>
     <div class="msg ${isMe?"me":""}" id="${k}">
       <div class="name">${d.name}</div>
       ${replyHTML}
@@ -275,6 +266,15 @@ db.on("child_added",snap=>{
 
   chat.appendChild(row);
   chat.scrollTop=chat.scrollHeight;
+});
+
+/* ===== DELETE FIX ===== */
+db.on("child_removed", snap=>{
+  const id = snap.key;
+  const msg = document.getElementById(id);
+  if(msg){
+    msg.parentElement.remove();
+  }
 });
 
 /* ===== REPLY ===== */
@@ -290,10 +290,7 @@ function setReply(id){
       <span class="close" onclick="cancelReply()">✖</span>
     </div>`;
 }
-function cancelReply(){
-  replyTo=null;
-  replyArea.innerHTML="";
-}
+function cancelReply(){replyTo=null;replyArea.innerHTML="";}
 
 /* ===== TYPING ===== */
 let tmr;
