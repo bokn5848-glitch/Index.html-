@@ -26,21 +26,30 @@ header{
 .name{font-weight:bold;color:#4a90e2;font-size:13px}
 .content{white-space:pre-wrap}
 .time{font-size:11px;color:#888;text-align:right}
-.status{
-  font-size:11px;color:#4a90e2;
-  text-align:right;cursor:pointer
-}
-.delete{font-size:12px;color:red;cursor:pointer;text-align:right}
-.replyBtn{font-size:12px;color:#4a90e2;cursor:pointer;text-align:right}
+.status{font-size:11px;color:#4a90e2;text-align:right;cursor:pointer}
+.delete,.replyBtn{font-size:12px;color:#4a90e2;cursor:pointer;text-align:right}
+.delete{color:red}
 
 .replyPreview{
   font-size:13px;background:#f1f1f1;
   padding:5px 8px;border-radius:8px;margin-bottom:4px
 }
 
-.reactions{display:flex;gap:6px;font-size:15px;margin-top:4px}
-.reactions span{opacity:.6}
-.reactions span.active{opacity:1}
+/* REACTION */
+.reactionBar{
+  position:absolute;
+  bottom:100%;
+  left:10px;
+  background:#fff;
+  padding:6px 10px;
+  border-radius:30px;
+  box-shadow:0 4px 12px rgba(0,0,0,.25);
+  display:none;
+  gap:8px;
+  z-index:999
+}
+.reactionBar span{font-size:22px;cursor:pointer}
+.reactionList{display:flex;gap:6px;font-size:16px;margin-top:4px}
 
 .seenBox{
   position:absolute;
@@ -108,6 +117,7 @@ firebase.initializeApp({
 
 const db=firebase.database().ref("uchat");
 const typingRef=firebase.database().ref("typing");
+const REACTIONS=["❤️","😂","😮","😢","😡","👍"];
 
 const chat=document.getElementById("chat");
 const textInput=document.getElementById("text");
@@ -146,13 +156,7 @@ function wrap28(t){
 function send(){
   const t=textInput.value.trim();
   if(!t) return;
-  db.push({
-    name:user,
-    msg:wrap28(t),
-    time:Date.now(),
-    reply:replyTo,
-    seen:{}
-  });
+  db.push({name:user,msg:wrap28(t),time:Date.now(),reply:replyTo,seen:{},react:{}});
   textInput.value="";
   replyTo=null;
   replyArea.innerHTML="";
@@ -164,11 +168,15 @@ const tf=t=>{
   return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");
 };
 
-/* XÁC NHẬN XÓA */
 function confirmDelete(id){
   if(confirm("Bạn có chắc chắn muốn xóa tin nhắn này không?")){
     db.child(id).remove();
   }
+}
+
+function react(id,emoji){
+  const r=db.child(id).child("react").child(emoji).child(user);
+  r.once("value",s=>s.exists()?r.remove():r.set(true));
 }
 
 /* RECEIVE */
@@ -177,19 +185,30 @@ db.on("child_added",snap=>{
   const div=document.createElement("div");
   div.className="msg "+(isMe?"me":"");div.id=k;
 
-  let replyHTML="";
-  if(d.reply) replyHTML=`<div class="replyPreview"><b>${d.reply.name}</b>: ${d.reply.msg}</div>`;
+  let replyHTML=d.reply?`<div class="replyPreview"><b>${d.reply.name}</b>: ${d.reply.msg}</div>`:"";
 
   div.innerHTML=`
+    <div class="reactionBar" id="react_${k}">
+      ${REACTIONS.map(e=>`<span onclick="react('${k}','${e}')">${e}</span>`).join("")}
+    </div>
+
     <div class="name">${d.name}</div>
     ${replyHTML}
     <div class="content">${d.msg}</div>
+    <div class="reactionList" id="list_${k}"></div>
     <div class="time">${tf(d.time)}</div>
     ${isMe?`<div class="status" id="status_${k}">✔️ Đã gửi</div>`:""}
     <div class="seenBox" id="seen_${k}"></div>
     <div class="replyBtn" onclick="setReply('${k}')">↩️ Trả lời</div>
     ${isMe?`<div class="delete" onclick="confirmDelete('${k}')">🗑️ Xóa</div>`:""}
   `;
+
+  div.oncontextmenu=e=>{
+    e.preventDefault();
+    document.querySelectorAll(".reactionBar").forEach(r=>r.style.display="none");
+    document.getElementById("react_"+k).style.display="flex";
+  };
+  document.body.onclick=()=>document.querySelectorAll(".reactionBar").forEach(r=>r.style.display="none");
 
   if(!isMe){
     const obs=new IntersectionObserver(e=>{
@@ -205,25 +224,27 @@ db.on("child_added",snap=>{
   chat.scrollTop=chat.scrollHeight;
 });
 
-db.on("child_removed",s=>{
-  document.getElementById(s.key)?.remove();
+db.on("child_changed",snap=>{
+  const d=snap.val(),k=snap.key;
+  const list=document.getElementById("list_"+k);
+  if(list && d.react){
+    list.innerHTML="";
+    for(const e in d.react){
+      const c=Object.keys(d.react[e]).length;
+      if(c>0) list.innerHTML+=`<span>${e} ${c}</span>`;
+    }
+  }
 });
+
+db.on("child_removed",s=>document.getElementById(s.key)?.remove());
 
 function setReply(id){
   const m=document.getElementById(id);
-  replyTo={
-    name:m.querySelector(".name").innerText,
-    msg:m.querySelector(".content").innerText
-  };
-  replyArea.innerHTML=
-    `<div class="replyBox">
-      Trả lời <b>${replyTo.name}</b>: ${replyTo.msg}
-      <span class="close" onclick="cancelReply()">✖</span>
-    </div>`;
+  replyTo={name:m.querySelector(".name").innerText,msg:m.querySelector(".content").innerText};
+  replyArea.innerHTML=`<div class="replyBox">Trả lời <b>${replyTo.name}</b>: ${replyTo.msg}<span class="close" onclick="cancelReply()">✖</span></div>`;
 }
 function cancelReply(){replyTo=null;replyArea.innerHTML="";}
 
-/* TYPING */
 let tmr;
 textInput.oninput=()=>{
   typingRef.child(user).set(true);
