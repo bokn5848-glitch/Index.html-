@@ -18,10 +18,10 @@ header{background:#4a90e2;color:#fff;padding:15px;text-align:center;font-size:20
 .time{font-size:11px;color:#888}
 .delete{color:red;cursor:pointer;font-size:12px}
 #typing{font-size:13px;color:#666;padding:5px 10px;height:20px}
-#input{display:flex;gap:5px;padding:10px;background:#fff}
+#inputBox{display:flex;gap:5px;padding:10px;background:#fff}
 input{flex:1;padding:10px;font-size:16px}
 button{padding:10px 15px}
-#login{text-align:center;padding:20px}
+#loginBox{text-align:center;padding:20px}
 </style>
 </head>
 
@@ -29,16 +29,16 @@ button{padding:10px 15px}
 
 <header>💬 UChat</header>
 
-<div id="login">
+<div id="loginBox">
   <input id="username" placeholder="Nhập tên của bạn">
   <br><br>
-  <button onclick="login()">Vào chat</button>
+  <button onclick="doLogin()">Vào chat</button>
 </div>
 
 <div id="chat" style="display:none"></div>
 <div id="typing"></div>
 
-<div id="input" style="display:none">
+<div id="inputBox" style="display:none">
   <input id="text" placeholder="Nhập tin nhắn...">
   <button onclick="send()">Gửi</button>
 </div>
@@ -60,32 +60,41 @@ const db=firebase.database().ref("uchat");
 const typingRef=firebase.database().ref("typing");
 
 const chat=document.getElementById("chat");
+const loginBox=document.getElementById("loginBox");
+const inputBox=document.getElementById("inputBox");
+const typing=document.getElementById("typing");
+const notifySound=document.getElementById("notifySound");
+const textInput=document.getElementById("text");
+
 let user="";
 let firstLoad=true;
 
 // auto login
 const saved=localStorage.getItem("uchat_name");
-if(saved){user=saved;loginUI();}
+if(saved){
+  user=saved;
+  showChat();
+}
 
-function login(){
-  const name=username.value.trim();
+function doLogin(){
+  const name=document.getElementById("username").value.trim();
   if(!name) return alert("Nhập tên!");
   user=name;
   localStorage.setItem("uchat_name",name);
-  loginUI();
+  showChat();
 }
 
-function loginUI(){
-  login.style.display="none";
+function showChat(){
+  loginBox.style.display="none";
   chat.style.display="block";
-  input.style.display="flex";
+  inputBox.style.display="flex";
 }
 
 function send(){
-  const text=document.getElementById("text").value.trim();
+  const text=textInput.value.trim();
   if(!text) return;
   db.push({name:user,msg:text,time:Date.now()});
-  document.getElementById("text").value="";
+  textInput.value="";
   typingRef.child(user).remove();
 }
 
@@ -128,10 +137,9 @@ db.on("child_removed",snap=>{
   document.getElementById(snap.key)?.remove();
 });
 
-// ===== ĐANG GÕ =====
+// đang gõ
 let typingTimer;
-text.addEventListener("input",()=>{
-  if(!user) return;
+textInput.addEventListener("input",()=>{
   typingRef.child(user).set(true);
   clearTimeout(typingTimer);
   typingTimer=setTimeout(()=>typingRef.child(user).remove(),1200);
