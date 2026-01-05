@@ -49,7 +49,6 @@ header{
   padding:5px 8px;border-radius:8px;margin-bottom:4px
 }
 
-/* REACTION */
 .reactionBar{
   position:absolute;bottom:100%;left:50px;
   background:#fff;padding:6px 10px;border-radius:30px;
@@ -58,13 +57,6 @@ header{
 }
 .reactionBar span{font-size:22px;cursor:pointer}
 .reactionList{display:flex;gap:6px;font-size:16px;margin-top:4px}
-
-.seenBox{
-  position:absolute;right:0;bottom:100%;
-  background:#fff;padding:8px 10px;border-radius:10px;
-  box-shadow:0 4px 12px rgba(0,0,0,.25);
-  font-size:13px;display:none;z-index:999
-}
 
 #typing{font-size:13px;color:#666;padding:5px 10px;height:18px}
 
@@ -132,33 +124,42 @@ const textInput=document.getElementById("text");
 const replyArea=document.getElementById("replyArea");
 const typing=document.getElementById("typing");
 
-let user="",gender="",replyTo=null;
+let user="", userGender="", replyTo=null;
 
-const nSaved=localStorage.getItem("uchat_name");
-const gSaved=localStorage.getItem("uchat_gender");
-if(nSaved && gSaved){user=nSaved;gender=gSaved;showChat();}
+const savedName=localStorage.getItem("uchat_name");
+const savedGender=localStorage.getItem("uchat_gender");
+if(savedName && savedGender){
+  user=savedName;
+  userGender=savedGender;
+  showChat();
+}
 
 function doLogin(){
-  const n=username.value.trim();
-  const g=gender.value;
-  if(!n||!g) return alert("Nhập tên và chọn giới tính!");
-  user=n;gender=g;
+  const n=document.getElementById("username").value.trim();
+  const g=document.getElementById("gender").value;
+
+  if(!n || !g){
+    alert("Nhập tên và chọn giới tính!");
+    return;
+  }
+
+  user=n;
+  userGender=g;
   localStorage.setItem("uchat_name",n);
   localStorage.setItem("uchat_gender",g);
   showChat();
 }
+
 function showChat(){
   loginBox.style.display="none";
   chat.style.display="block";
   inputBox.style.display="flex";
 }
+
 function logout(){
   if(!confirm("Đăng xuất / đổi tên?"))return;
   localStorage.clear();
-  chat.innerHTML="";
-  loginBox.style.display="block";
-  chat.style.display="none";
-  inputBox.style.display="none";
+  location.reload();
 }
 
 function send(){
@@ -166,7 +167,7 @@ function send(){
   if(!t) return;
   db.push({
     name:user,
-    gender:gender,
+    gender:userGender,
     msg:t,
     time:Date.now(),
     reply:replyTo,
@@ -184,7 +185,6 @@ const tf=t=>{
   return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");
 };
 
-/* RECEIVE */
 db.on("child_added",snap=>{
   const d=snap.val(),k=snap.key,isMe=d.name===user;
   const div=document.createElement("div");
@@ -221,18 +221,6 @@ db.on("child_added",snap=>{
 
   chat.appendChild(div);
   chat.scrollTop=chat.scrollHeight;
-});
-
-db.on("child_changed",snap=>{
-  const d=snap.val(),k=snap.key;
-  const list=document.getElementById("list_"+k);
-  if(list && d.react){
-    list.innerHTML="";
-    for(const e in d.react){
-      const c=Object.keys(d.react[e]).length;
-      if(c>0) list.innerHTML+=`<span>${e} ${c}</span>`;
-    }
-  }
 });
 
 function setReply(id){
